@@ -43,6 +43,21 @@ fn new_node<K:std::cmp::PartialEq+std::clone::Clone,
     };
     return foo;
 }
+fn new_node_link<K:std::cmp::PartialEq+std::clone::Clone,
+   I:std::clone::Clone>(input:&std::vec::Vec<K>)->Node<K,I>
+    where
+        K:std::clone::Clone,
+        I:std::clone::Clone,
+    {
+    let foo =  Node{
+        metadata:new_metadata(),
+        item:new_optstruct_a(
+            Link{ 
+                children:input.clone(),
+            }),
+    };
+    return foo;
+}
 #[derive(PartialEq,Eq,Deserialize,Serialize)]
 pub struct DataStructure<KeyType:std::cmp::Ord+std::clone::Clone,
     ItemData:std::clone::Clone>{
@@ -54,6 +69,10 @@ impl<KeyType:std::cmp::Ord+std::clone::Clone,
     pub fn insert(&mut self,key:&KeyType,data:ItemData)->Result<String,String>
     {
         return self.insert_node(key,new_node(data)); 
+    }
+    pub fn insertLink(&mut self,key:&KeyType,children:&std::vec::Vec<KeyType>)->Result<String,String>{
+        return self.insert_node(key,new_node_link(children));
+        
     }
     fn insert_node(&mut self,key:&KeyType,data:Node<KeyType,ItemData>)->Result<String,String>
         {
@@ -70,12 +89,36 @@ impl<KeyType:std::cmp::Ord+std::clone::Clone,
         std::collections::btree_map::Iter<'_, KeyType, Node<KeyType,ItemData>>{
         self.tree.iter()
     }
-    pub fn get(&self,key:KeyType)->Option<&Node<KeyType,ItemData>>
+    pub fn get(&self,key:KeyType)->Option<ItemData>
         where
             KeyType : std::cmp::Ord,
-    
     {
-        return self.tree.get(&key);
+        let temp = self.tree.get(&key);
+        if temp.is_none(){
+
+            return None;
+        }else{
+            return temp.unwrap().item.B();
+        }
+    }
+    fn getNode(&self,key:&KeyType)->Option<&Node<KeyType,ItemData>>{
+        return self.tree.get(key);
+    }
+    pub fn getLinks(&self,key:&KeyType)->Option<Vec<KeyType>>{
+        let data = self.getNode(key);
+        if data.is_some(){
+        
+            let vec_temp = data.unwrap().item.A();
+        
+            if vec_temp.is_some(){
+                return Some(vec_temp.unwrap().children);
+            }else{
+                return None;
+            }
+        }else{
+            return None;
+        }
+        return None;
     }
     pub fn rightJoin(&self,right: &DataStructure<KeyType,ItemData>)->DataStructure<KeyType,ItemData>
     {
@@ -251,6 +294,17 @@ mod tests{
         let str_ds = serde_json::to_string(&dsr).unwrap();
         let mut dsl_t:DataStructure<u32,u32> = serde_json::from_str(&str_ds).unwrap();
 
+
+    }
+    #[test]
+    fn test_links(){
+        let mut dsr=new_datastructure::<u32,u32>();
+        dsr.insert(&0,0);
+        dsr.insert(&1,1);
+        dsr.insert(&2,2);
+        dsr.insertLink(&4,&vec![0,1]);
+        let foo:std::vec::Vec<u32> = vec![0,1];
+        assert!(dsr.getLinks(&4)==Some(foo));           
 
     }
 
