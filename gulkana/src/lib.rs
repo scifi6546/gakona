@@ -74,6 +74,9 @@ impl<KeyType:std::cmp::Ord+std::clone::Clone,
         return self.insert_node(key,new_node_link(children));
         
     }
+    pub fn overwriteLink(&mut self,key:&KeyType,children:&std::vec::Vec<KeyType>)->Result<String,String>{
+        return self.overwriteNode(key,new_node_link(children));
+    }
     fn insert_node(&mut self,key:&KeyType,data:Node<KeyType,ItemData>)->Result<String,String>
         {
         if self.tree.contains_key(key)==false{
@@ -83,6 +86,12 @@ impl<KeyType:std::cmp::Ord+std::clone::Clone,
             return Err("key already present".to_string());
         }
     
+
+    }
+    fn overwriteNode(&mut self,key:&KeyType,
+        data:Node<KeyType,ItemData>)->Result<String,String>{
+            self.tree.insert(key.clone(),data);
+            return Ok("".to_string());
 
     }
     pub fn iter(&self)->
@@ -119,6 +128,27 @@ impl<KeyType:std::cmp::Ord+std::clone::Clone,
             return None;
         }
         return None;
+    }
+    pub fn appendLinks(&mut self,key:&KeyType,
+        key_append:&KeyType)->Result<String,String>{
+        let data = self.getNode(key);
+        if data.is_some(){
+            let mut link_vec_opt = data.unwrap().item.A();
+            if link_vec_opt.is_some(){
+                let mut link_vec = link_vec_opt.unwrap().children;
+                if !link_vec.contains(key_append){
+                    link_vec.push(key_append.clone());
+                    return self.overwriteLink(key,&link_vec);
+                }else{
+                    return Ok("".to_string());
+                }
+            }else{
+                return Err("key not a link".to_string());
+            }
+        }else{
+            return Err("key not found".to_string());
+        }
+
     }
     pub fn rightJoin(&self,right: &DataStructure<KeyType,ItemData>)->DataStructure<KeyType,ItemData>
     {
