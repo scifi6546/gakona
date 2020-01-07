@@ -130,7 +130,7 @@ impl<KeyType:std::cmp::Ord+std::clone::Clone,
         return None;
     }
     pub fn contains(&self,key:&KeyType)->bool{
-        return self.tree.get(key).is_some();
+        return self.getNode(key).is_some();
     }
     pub fn appendLinks(&mut self,key:&KeyType,
         key_append:&KeyType)->Result<String,String>{
