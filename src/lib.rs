@@ -1,6 +1,9 @@
 use gulkana;
 use rand::prelude::*;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write; 
+
 #[derive(Clone,PartialEq)]
 pub struct DBEntry{
     path:String,
@@ -11,15 +14,20 @@ pub enum FSError{
     NodeNotLink,
     NodeNotData,
     PathNotPresent,
+    FileError,
+    SerializeError,
 }
 impl FSError{
+    #[allow(dead_code)]
     fn to_string(self)->String{
         match self{
-            KeyAllreadyPresent=>"KeyAllreadyPresent".to_string(),
-            KeyNotFound=>"KeyNotFound".to_string(),
-            NodeNotLink=>"NodeNotLink".to_string(),
-            NodeNotData=>"NodeNotData".to_string(),
-            PathNotPresent=>"PathNotPresent".to_string(),
+            FSError::KeyAllreadyPresent=>"KeyAllreadyPresent".to_string(),
+            FSError::KeyNotFound=>"KeyNotFound".to_string(),
+            FSError::NodeNotLink=>"NodeNotLink".to_string(),
+            FSError::NodeNotData=>"NodeNotData".to_string(),
+            FSError::PathNotPresent=>"PathNotPresent".to_string(),
+            FSError::FileError=>"File Error".to_string(),
+            FSError::SerializeError=>"Error when Serializing to String".to_string(),
         }
     }
 }
@@ -40,6 +48,24 @@ impl From<gulkana::DBOperationError> for FSError{
         }
     }
 }
+impl From<std::io::Error> for FSError{
+
+    fn from(error: std::io::Error)->Self{
+        match error{
+            _ =>FSError::FileError,
+        }
+    }
+}
+
+impl From<gulkana::SerializeError> for FSError{
+
+    fn from(error: gulkana::SerializeError)->Self{
+        match error{
+            _ =>FSError::SerializeError,
+        }
+    }
+}
+
 fn db_entry_to_map(db_entry: &DBEntry)->HashMap<String,String>{
     let mut out:HashMap<String,String>=HashMap::new();
     out.insert("path".to_string(),db_entry.path.clone());
@@ -58,13 +84,14 @@ fn map_to_db_entry(map:&HashMap<String,String>)->Result<DBEntry,FSError>{
         return Err(FSError::PathNotPresent);
     }
 }
-pub struct Database{
+pub struct Database<'a>{
     //root file system has key of 0
     db:gulkana::DataStructure<u32,DBType>,
     rng:ThreadRng,
+    file_backing:Option<&'a std::path::Path>
 }
 pub struct ChildIter<'a>{
-    db:&'a Database,
+    db:&'a Database<'a>,
     iter:std::slice::Iter<'a,KeyType>
 }
 impl<'a> Iterator for ChildIter<'a>{
@@ -80,13 +107,14 @@ impl<'a> Iterator for ChildIter<'a>{
     }
 }
 type KeyType=u32;
-impl Database{
+impl<'a> Database<'a>{
     pub fn insert(&mut self,input: DBEntry,parent:KeyType)->Result<KeyType,FSError>{
         let temp_key:KeyType = self.rng.gen();
         //checking if parent exists
         if self.db.contains(&parent){
             self.db.insert(&temp_key,db_entry_to_map(&input))?;
             self.db.append_links(&parent,&temp_key)?;
+            self.write_file()?;
             return Ok(temp_key);
         }else{
             return Err(FSError::KeyNotFound);
@@ -96,20 +124,19 @@ impl Database{
         let hash = self.db.get(key)?;
         return map_to_db_entry(hash); 
     }
-    pub fn make_dir(&mut self)->Option<KeyType>{
+    pub fn make_dir(&mut self)->Result<KeyType,FSError>{
         let temp_key = self.rng.gen();
-        let res = self.db.insert_link(&temp_key,&vec![]);
-        if res.is_ok(){
-            return Some(temp_key);
-        }else{
-            return None;
-        }
+        self.db.insert_link(&temp_key,&vec![])?;
+        self.write_file()?;
+        return Ok(temp_key);
+
     }
     fn make_dir_key(&mut self,key:&KeyType)->Result<(),FSError>{
         let res = self.get(key);
         //if key is not present
         if res.is_err(){
             self.db.insert_link(key,&vec![])?;
+            self.write_file()?;
             return Ok(());
         }else{
 
@@ -127,42 +154,55 @@ impl Database{
             iter:self.db.get_links(key)?.iter()
         })
     }
+    fn write_file(&self)->Result<(),FSError>{
+        if self.file_backing.is_some(){
+            let mut file = File::create(self.file_backing.unwrap())?;
+            file.write(self.db.to_string()?.as_bytes().as_ref())?;
+            return Ok(());
+        }else{
+            return Ok(());
+        }
+    }
 }
-pub fn new()->Database{
+pub fn new<'a>()->Result<Database<'a>,FSError>{
     let mut db = Database{
         db:gulkana::new_datastructure(),
         rng:rand::thread_rng(),
+        file_backing:None,
     };
-    db.make_dir_key(&0);
-    return db;
+    
+    db.make_dir_key(&0)?;
+    return Ok(db);
+}
+pub fn new_backed<'a>(path: & 'a std::path::Path)->Result<Database<'a>,FSError>{
+    let mut db = new()?;
+    db.file_backing=Some(path);
+    db.write_file()?;
+    return Ok(db);
 }
 
 #[cfg(test)]
 mod tests{
     use super::*;
     #[test]
+    #[allow(unused_must_use)]
     fn insert(){
         let in_db = DBEntry{
             path:"foo".to_string(),
         };
-        let mut db = new();
-        let key_res = db.insert(in_db.clone(),0);
-        if key_res.is_ok(){
-            let out = db.get(&key_res.ok().unwrap());
-            assert!(in_db==out.ok().unwrap());
-        }else{
-            println!("{}",key_res.err().unwrap().to_string());
-            assert!(1==0);
-        }
+        let mut db = new().ok().unwrap();
+        let key_res = db.insert(in_db.clone(),0).ok().unwrap();
+        let out = db.get(&key_res);
+        assert!(in_db==out.ok().unwrap());
     }
     #[test]
     fn get_root_children(){
-        let mut db = new();
+        let mut db = new().ok().unwrap();
         let in_db = DBEntry{
             path:"foo".to_string(),
         };
         let key = db.insert(in_db.clone(),0).ok().unwrap();
-        let dir = db.make_dir().unwrap();
+        let dir = db.make_dir().ok().unwrap();
         let key2 = db.insert(in_db,dir).ok().unwrap();
         let v = db.get_node_children(0).ok().unwrap(); 
         for i in v{
@@ -176,7 +216,7 @@ mod tests{
     }
     #[test]
     fn iterate_root(){
-        let mut db = new();
+        let mut db = new().ok().unwrap();
         let key = db.insert(DBExtType{path:"foo".to_string()},0).ok().unwrap();
         for (key_t,data) in db.iter_children(&0).ok().unwrap(){
             assert!(key_t==&key&&data.path=="foo".to_string());
@@ -188,9 +228,10 @@ mod tests{
         let in_db = DBEntry{
             path:"foo".to_string(),
         };
-        let mut db = new();
-        for i in 1..10000{
+        let mut db = new().ok().unwrap();
+        for _i in 1..10000{
             let key_res = db.insert(in_db.clone(),0);
+            assert!(key_res.is_ok());
         }
 
     }
