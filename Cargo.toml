@@ -1,6 +1,6 @@
 [package]
 name = "gakona"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["nick <scifi6546@protonmail.com>"]
 edition = "2018"
 
