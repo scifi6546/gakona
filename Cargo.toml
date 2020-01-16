@@ -3,7 +3,8 @@ name = "gakona"
 version = "0.2.0"
 authors = ["nick <scifi6546@protonmail.com>"]
 edition = "2018"
-
+description="A simple database for storing metadata about files"
+license="GPL-3.0-or-later"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
