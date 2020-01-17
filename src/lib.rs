@@ -3,7 +3,6 @@ use rand::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write; 
-use std::rc::Rc;
 use std::path::Path;
 
 #[derive(Clone,PartialEq)]
@@ -89,7 +88,7 @@ fn map_to_db_entry(map:&HashMap<String,String>)->Result<DBEntry,FSError>{
 pub struct Database{
     //root file system has key of 0
     db:gulkana::DataStructure<u32,DBType>,
-    rng:ThreadRng,
+   // rng:ThreadRng,
     file_backing:Option<std::string::String>
 }
 pub struct ChildIter<'a>{
@@ -111,7 +110,8 @@ impl<'a> Iterator for ChildIter<'a>{
 type KeyType=u32;
 impl Database{
     pub fn insert(&mut self,input: DBEntry,parent:KeyType)->Result<KeyType,FSError>{
-        let temp_key:KeyType = self.rng.gen();
+        let mut rng = thread_rng();
+        let temp_key:KeyType = rng.gen();
         //checking if parent exists
         if self.db.contains(&parent){
             self.db.insert(&temp_key,db_entry_to_map(&input))?;
@@ -127,7 +127,8 @@ impl Database{
         return map_to_db_entry(hash); 
     }
     pub fn make_dir(&mut self)->Result<KeyType,FSError>{
-        let temp_key = self.rng.gen();
+        let mut rng = thread_rng();
+        let temp_key = rng.gen();
         self.db.insert_link(&temp_key,&vec![])?;
         self.write_file()?;
         return Ok(temp_key);
@@ -170,7 +171,6 @@ impl Database{
 pub fn new()->Result<Database,FSError>{
     let mut db = Database{
         db:gulkana::new_datastructure(),
-        rng:rand::thread_rng(),
         file_backing:None,
     };
     
