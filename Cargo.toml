@@ -1,6 +1,6 @@
 [package]
 name = "gakona"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["nick <scifi6546@protonmail.com>"]
 edition = "2018"
 description="A simple database for storing metadata about files"

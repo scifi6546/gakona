@@ -3,6 +3,8 @@ use rand::prelude::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write; 
+use std::rc::Rc;
+use std::path::Path;
 
 #[derive(Clone,PartialEq)]
 pub struct DBEntry{
@@ -84,14 +86,14 @@ fn map_to_db_entry(map:&HashMap<String,String>)->Result<DBEntry,FSError>{
         return Err(FSError::PathNotPresent);
     }
 }
-pub struct Database<'a>{
+pub struct Database{
     //root file system has key of 0
     db:gulkana::DataStructure<u32,DBType>,
     rng:ThreadRng,
-    file_backing:Option<&'a std::path::Path>
+    file_backing:Option<std::string::String>
 }
 pub struct ChildIter<'a>{
-    db:&'a Database<'a>,
+    db:&'a Database,
     iter:std::slice::Iter<'a,KeyType>
 }
 impl<'a> Iterator for ChildIter<'a>{
@@ -107,7 +109,7 @@ impl<'a> Iterator for ChildIter<'a>{
     }
 }
 type KeyType=u32;
-impl<'a> Database<'a>{
+impl Database{
     pub fn insert(&mut self,input: DBEntry,parent:KeyType)->Result<KeyType,FSError>{
         let temp_key:KeyType = self.rng.gen();
         //checking if parent exists
@@ -156,7 +158,8 @@ impl<'a> Database<'a>{
     }
     fn write_file(&self)->Result<(),FSError>{
         if self.file_backing.is_some(){
-            let mut file = File::create(self.file_backing.unwrap())?;
+            let p = Path::new(self.file_backing.as_ref().unwrap().as_str());
+            let mut file = File::create(p)?;
             file.write(self.db.to_string()?.as_bytes().as_ref())?;
             return Ok(());
         }else{
@@ -164,7 +167,7 @@ impl<'a> Database<'a>{
         }
     }
 }
-pub fn new<'a>()->Result<Database<'a>,FSError>{
+pub fn new()->Result<Database,FSError>{
     let mut db = Database{
         db:gulkana::new_datastructure(),
         rng:rand::thread_rng(),
@@ -174,7 +177,7 @@ pub fn new<'a>()->Result<Database<'a>,FSError>{
     db.make_dir_key(&0)?;
     return Ok(db);
 }
-pub fn new_backed<'a>(path: & 'a std::path::Path)->Result<Database<'a>,FSError>{
+pub fn new_backed<'a>(path:std::string::String)->Result<Database,FSError>{
     let mut db = new()?;
     db.file_backing=Some(path);
     db.write_file()?;
